@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรแกรมจัดการออเดอร์ (ดึงรหัสอัตโนมัติ + บันทึก + ส่งออก)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', 'sans-serif';
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom-width: 1px;
+            border-color: #e5e7eb;
+            vertical-align: middle;
+        }
+        thead th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .table-container {
+             max-height: 60vh;
+             overflow-y: auto;
+             border: 1px solid #e5e7eb;
+             border-radius: 0.375rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+        input[type="text"], input[type="number"], input[type="date"], input[type="color"] {
+             width: 100%;
+             padding: 0.5rem 0.75rem;
+             border: 1px solid #d1d5db;
+             border-radius: 0.375rem;
+             box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.05);
+             transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 1px #4f46e5;
+        }
+        input[type="color"] {
+            height: 2.5rem;
+            padding: 0.25rem;
+        }
+        /* Style for readonly inputs */
+        input[readonly] {
+            background-color: #f3f4f6; /* bg-gray-100 */
+            cursor: not-allowed;
+            border-color: #e5e7eb; /* border-gray-200 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-6xl bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">จัดการออเดอร์ลูกค้า (ดึงรหัสอัตโนมัติ)</h1>
+
+        <form id="orderForm" class="mb-8 p-4 border rounded-md bg-gray-50">
+             <h2 class="text-lg font-semibold mb-4 text-gray-700">เพิ่มออเดอร์ใหม่</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div>
+                    <label for="orderDate">วันที่สั่ง:</label>
+                    <input type="date" id="orderDate" required>
+                </div>
+                <div class="lg:col-span-2">
+                    <label for="customerName">ชื่อลูกค้า:</label>
+                    <input type="text" id="customerName" placeholder="ชื่อ-นามสกุล" required>
+                </div>
+                <div>
+                    <label for="itemId">ลำดับ:</label>
+                    <input type="number" id="itemId" placeholder="XX" required>
+                </div>
+                <div>
+                    <label for="sku">รหัส:</label>
+                    <input type="text" id="sku" placeholder="จะแสดงอัตโนมัติ" readonly required>
+                </div>
+                <div>
+                    <label for="itemSize">ไซส์:</label>
+                    <input type="text" id="itemSize" placeholder="เช่น 52">
+                </div>
+                 <div>
+                    <label for="itemColor">สี:</label>
+                    <input type="text" id="itemColor" placeholder="เช่น ทอง, เงิน">
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded shadow transition duration-150 ease-in-out">
+                    เพิ่มออเดอร์
+                </button>
+                 <button type="button" id="clearAllOrdersBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded shadow transition duration-150 ease-in-out ml-4">
+                    ล้างออเดอร์ทั้งหมด (!)
+                </button>
+            </div>
+        </form>
+
+         <div id="messageBox" class="mb-4 p-3 rounded-md text-center font-medium hidden"></div>
+
+        <div>
+             <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-700">แดชบอร์ดออเดอร์ร่วม</h2>
+                <button type="button" id="exportCsvBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow transition duration-150 ease-in-out text-sm">
+                    ส่งออกเป็น CSV
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th>วันที่สั่ง</th>
+                            <th>ชื่อลูกค้า</th>
+                            <th>ลำดับ</th>
+                            <th>รหัส</th>
+                            <th>ไซส์</th>
+                            <th>สี</th>
+                            </tr>
+                    </thead>
+                    <tbody id="orderDashboardBody" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- JavaScript Logic ---
+
+        // --- NEW: Stock Data Integrated ---
+        // This data links Item ID (ลำดับ) to SKU (รหัส) and other details
+         const stockData = [
+            // Data from previous context...
+            { id: 2, code: "N0224050", diamond_spec_carat: 0.48, wholesale_price: 3705.00 },
+            { id: 10, code: "N0424009", diamond_spec_carat: 0.54, wholesale_price: 3250.00 },
+            { id: 11, code: "N0424093", diamond_spec_carat: 1.27, wholesale_price: 8385.00 },
+            { id: 15, code: "N0424067", diamond_spec_carat: 0.31, wholesale_price: 2210.00 },
+            { id: 16, code: "N0923120", diamond_spec_carat: 0.40, wholesale_price: 2535.00 },
+            { id: 20, code: "N0723053", diamond_spec_carat: 0.32, wholesale_price: 3055.00 },
+            { id: 22, code: "N0723046", diamond_spec_carat: 0.46, wholesale_price: 2795.00 },
+            { id: 23, code: "N0224078", diamond_spec_carat: 1.03, wholesale_price: 4875.00 },
+            { id: 34, code: "N1223019", diamond_spec_carat: 0.96, wholesale_price: 5525.00 },
+            { id: 45, code: "N1224006", diamond_spec_carat: 0.20, wholesale_price: 1885.00 },
+            { id: 46, code: "N0824005", diamond_spec_carat: 0.21, wholesale_price: 1755.00 },
+            { id: 47, code: "N0924026", diamond_spec_carat: 0.20, wholesale_price: 1820.00 },
+            { id: 48, code: "N0324081", diamond_spec_carat: 0.30, wholesale_price: 2470.00 },
+            { id: 49, code: "N0324072", diamond_spec_carat: 0.33, wholesale_price: 2730.00 },
+            { id: 53, code: "N1124032", diamond_spec_carat: 0.35, wholesale_price: 2705.00 },
+            { id: 58, code: "N1124005", diamond_spec_carat: 0.26, wholesale_price: 2510.00 },
+            { id: 63, code: "N0422054", diamond_spec_carat: 0.60, wholesale_price: 3250.00 },
+            { id: 64, code: "N0824042", diamond_spec_carat: 0.25, wholesale_price: 1950.00 },
+            { id: 71, code: "N1124105", diamond_spec_carat: 1.47, wholesale_price: 10075.00 },
+            { id: 73, code: "N0422018", diamond_spec_carat: 0.89, wholesale_price: 4355.00 },
+            { id: 75, code: "N0524148", diamond_spec_carat: 0.49, wholesale_price: 3185.00 },
+            { id: 77, code: "N0824041", diamond_spec_carat: 0.22, wholesale_price: 1885.00 },
+            { id: 78, code: "N1224046", diamond_spec_carat: 0.21, wholesale_price: 1820.00 },
+            { id: 79, code: "N1224048", diamond_spec_carat: 0.31, wholesale_price: 2210.00 },
+            { id: 80, code: "N1224049", diamond_spec_carat: 0.83, wholesale_price: 4225.00 },
+            { id: 81, code: "N1224050", diamond_spec_carat: 0.47, wholesale_price: 2730.00 },
+            { id: 87, code: "N0125030", diamond_spec_carat: 0.38, wholesale_price: 2405.00 },
+            { id: 88, code: "N0125021", diamond_spec_carat: 0.45, wholesale_price: 2730.00 },
+            { id: 89, code: "N0125009", diamond_spec_carat: 0.38, wholesale_price: 2470.00 },
+            { id: 90, code: "N0125010", diamond_spec_carat: 0.69, wholesale_price: 3965.00 },
+            { id: 91, code: "N0125012", diamond_spec_carat: 0.64, wholesale_price: 5135.00 },
+            { id: 92, code: "N0125013", diamond_spec_carat: 0.74, wholesale_price: 5720.00 },
+            { id: 95, code: "N0125037", diamond_spec_carat: 0.02, wholesale_price: 1105.00 },
+            { id: 97, code: "N0125039", diamond_spec_carat: 0.15, wholesale_price: 1625.00 },
+            { id: 98, code: "N0125038", diamond_spec_carat: 0.10, wholesale_price: 1365.00 },
+            { id: 110, code: "N0125029", diamond_spec_carat: 1.29, wholesale_price: 8775.00 },
+            { id: 111, code: "N0125017", diamond_spec_carat: 1.88, wholesale_price: 10465.00 },
+            { id: 112, code: "N1023051", diamond_spec_carat: 1.57, wholesale_price: 6890.00 },
+            { id: 114, code: "N0623081", diamond_spec_carat: 1.48, wholesale_price: 6695.00 },
+            { id: 115, code: "N0424042", diamond_spec_carat: 0.60, wholesale_price: 3510.00 },
+            { id: 116, code: "N0423009", diamond_spec_carat: 0.33, wholesale_price: 2145.00 },
+            { id: 118, code: "N1223114", diamond_spec_carat: 0.20, wholesale_price: 1820.00 },
+            { id: 119, code: "N0125001", diamond_spec_carat: 0.69, wholesale_price: 4485.00 },
+            { id: 120, code: "N0422067", diamond_spec_carat: 1.52, wholesale_price: 6890.00 },
+            { id: 122, code: "N0424005", diamond_spec_carat: 0.54, wholesale_price: 4550.00 },
+            { id: 123, code: "N0125024", diamond_spec_carat: 0.71, wholesale_price: 5330.00 },
+            { id: 124, code: "N0424027", diamond_spec_carat: 0.50, wholesale_price: 3250.00 },
+            { id: 127, code: "N0125074", diamond_spec_carat: 2.00, wholesale_price: 13260.00 },
+            { id: 128, code: "N0125077", diamond_spec_carat: 0.81, wholesale_price: 4225.00 },
+            { id: 129, code: "P0924008", diamond_spec_carat: 0.73, wholesale_price: 3770.00 }
+        ];
+        // --- End of Stock Data ---
+
+
+        const STORAGE_KEY = 'customerOrders';
+        let orders = loadOrders();
+
+        // Get references to elements
+        const orderForm = document.getElementById('orderForm');
+        const orderDateInput = document.getElementById('orderDate');
+        const customerNameInput = document.getElementById('customerName');
+        const itemIdInput = document.getElementById('itemId');
+        const skuInput = document.getElementById('sku'); // Reference to the SKU input (now readonly)
+        const itemSizeInput = document.getElementById('itemSize');
+        const itemColorInput = document.getElementById('itemColor');
+        const orderDashboardBody = document.getElementById('orderDashboardBody');
+        const messageBox = document.getElementById('messageBox');
+        const clearAllOrdersBtn = document.getElementById('clearAllOrdersBtn');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+         // Function to display messages (same as before)
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700');
+            if (isError) { messageBox.classList.add('bg-red-100', 'text-red-700'); }
+            else { messageBox.classList.add('bg-green-100', 'text-green-700'); }
+            messageBox.classList.remove('hidden');
+            setTimeout(() => { messageBox.classList.add('hidden'); }, 3000);
+        }
+
+        // Function to load orders from localStorage (same as before)
+        function loadOrders() {
+            const savedOrders = localStorage.getItem(STORAGE_KEY);
+            if (savedOrders) {
+                try { return JSON.parse(savedOrders); }
+                catch (e) { console.error("Error parsing saved orders:", e); return []; }
+            } else { return []; }
+        }
+
+        // Function to save orders to localStorage (same as before)
+        function saveOrders() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(orders)); }
+            catch (e) { console.error("Error saving orders:", e); showMessage("เกิดข้อผิดพลาดในการบันทึกข้อมูลออเดอร์", true); }
+        }
+
+        // Function to display orders in the dashboard table (same as before)
+        function displayOrders() {
+             orderDashboardBody.innerHTML = '';
+            if (orders.length === 0) {
+                orderDashboardBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">ยังไม่มีออเดอร์</td></tr>`;
+                return;
+            }
+            orders.forEach(order => {
+                const row = orderDashboardBody.insertRow();
+                row.classList.add('hover:bg-gray-100');
+                row.insertCell().textContent = order.orderDate;
+                row.insertCell().textContent = order.customerName;
+                row.insertCell().textContent = order.itemId;
+                row.insertCell().textContent = order.sku; // Display SKU from saved order data
+                row.insertCell().textContent = order.itemSize || '-';
+                row.insertCell().textContent = order.itemColor || '-';
+                // Styling
+                row.cells[0].classList.add('text-gray-700');
+                row.cells[1].classList.add('text-gray-900', 'font-medium');
+                row.cells[2].classList.add('text-gray-700');
+                row.cells[3].classList.add('text-gray-700', 'font-mono');
+                row.cells[4].classList.add('text-gray-700');
+                row.cells[5].classList.add('text-gray-700');
+            });
+        }
+
+        // --- NEW: Function to update SKU based on Item ID ---
+        function updateSkuBasedOnId() {
+            const itemIdValue = itemIdInput.value;
+            if (!itemIdValue) {
+                skuInput.value = ''; // Clear SKU if ID is empty
+                return;
+            }
+
+            const itemId = parseInt(itemIdValue);
+            if (isNaN(itemId)) {
+                 skuInput.value = ''; // Clear SKU if ID is not a number
+                 return;
+            }
+
+            // Find the item in stockData
+            const foundItem = stockData.find(item => item.id === itemId);
+
+            if (foundItem) {
+                skuInput.value = foundItem.code; // Set the SKU value
+            } else {
+                skuInput.value = ''; // Clear SKU if ID not found
+                // Optional: Show a small warning or change border color
+                // showMessage(`ไม่พบข้อมูลสำหรับลำดับ ${itemId}`, true); // Maybe too intrusive
+            }
+        }
+
+
+        // Function to handle form submission (add order) - Modified validation
+        function addOrder(event) {
+            event.preventDefault();
+            const orderDate = orderDateInput.value;
+            const customerName = customerNameInput.value.trim();
+            const itemId = itemIdInput.value; // Keep as string from input for display consistency
+            const sku = skuInput.value; // Get value from the (now readonly) SKU input
+            const itemSize = itemSizeInput.value.trim();
+            const itemColor = itemColorInput.value.trim();
+
+            // Validation: Check required fields, including the auto-filled SKU
+            if (!orderDate || !customerName || !itemId || !sku) { // Check if SKU has a value
+                showMessage("กรุณากรอกข้อมูลที่จำเป็น (วันที่, ชื่อลูกค้า, ลำดับ) และตรวจสอบว่าลำดับถูกต้องเพื่อแสดงรหัส", true);
+                return;
+            }
+
+            const newOrder = { orderDate, customerName, itemId, sku, itemSize, itemColor };
+            orders.push(newOrder);
+            saveOrders();
+            displayOrders();
+            showMessage("เพิ่มออเดอร์และบันทึกข้อมูลเรียบร้อยแล้ว");
+            orderForm.reset();
+            skuInput.value = ''; // Explicitly clear readonly SKU field on reset
+            orderDateInput.valueAsDate = new Date();
+        }
+
+        // Function to clear all orders (same as before)
+        function clearAllOrders() {
+            if (confirm("คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลออเดอร์ทั้งหมด? ข้อมูลที่ลบไปแล้วจะไม่สามารถกู้คืนได้")) {
+                orders = [];
+                localStorage.removeItem(STORAGE_KEY);
+                displayOrders();
+                showMessage("ล้างข้อมูลออเดอร์ทั้งหมดเรียบร้อยแล้ว");
+            }
+        }
+
+        // Function to escape values for CSV (same as before)
+        function escapeCsvValue(value) {
+            const stringValue = String(value == null ? "" : value);
+            if (/[",\n]/.test(stringValue)) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+        }
+
+        // Function to export orders to CSV (same as before)
+        function exportOrdersToCsv() {
+            if (orders.length === 0) { showMessage("ไม่มีข้อมูลออเดอร์ให้ส่งออก", true); return; }
+            const headers = ['วันที่สั่ง', 'ชื่อลูกค้า', 'ลำดับ', 'รหัส', 'ไซส์', 'สี'];
+            const headerRow = headers.map(escapeCsvValue).join(',');
+            const dataRows = orders.map(order => {
+                const values = [ order.orderDate, order.customerName, order.itemId, order.sku, order.itemSize, order.itemColor ];
+                return values.map(escapeCsvValue).join(',');
+            }).join('\n');
+            const csvContent = '\uFEFF' + headerRow + '\n' + dataRows;
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                const timestamp = new Date().toISOString().slice(0, 10);
+                link.setAttribute("download", `orders_export_${timestamp}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showMessage("กำลังดาวน์โหลดไฟล์ CSV...");
+            } else { showMessage("เบราว์เซอร์ของคุณไม่รองรับการดาวน์โหลดไฟล์โดยตรง", true); }
+        }
+
+
+        // --- Event Listeners ---
+        orderForm.addEventListener('submit', addOrder);
+        clearAllOrdersBtn.addEventListener('click', clearAllOrders);
+        exportCsvBtn.addEventListener('click', exportOrdersToCsv);
+        itemIdInput.addEventListener('input', updateSkuBasedOnId); // NEW: Listener for Item ID input
+
+
+        // --- Initial Setup ---
+        orderDateInput.valueAsDate = new Date(); // Set default date
+        displayOrders(); // Display orders loaded from localStorage on page load
+
+    </script>
+
+</body>
+</html>
